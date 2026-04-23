@@ -2,6 +2,8 @@
 
 > **Generating Diverse Synthetic Personas at Scale** — An interactive, cinematic web application that transforms cutting-edge AI research into a production-ready tool for creating diverse, representative synthetic user populations.
 
+![Diverse Persona Generator Screenshot](images/diverse-persona-generator.png)
+
 ---
 
 ## 📋 Table of Contents
