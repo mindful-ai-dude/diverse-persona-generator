@@ -1,6 +1,6 @@
-# Diverse Persona Generator 
+# Diverse Persona Generator "Deterministic" and "Probablistic" 
 
-> **Generating Diverse Synthetic Personas at Scale** — An interactive, cinematic web application that transforms cutting-edge AI research into a production-ready tool for creating diverse, representative synthetic user populations.
+> **Generating Diverse Synthetic Personas at Scale** — An interactive, web application that transforms cutting-edge AI research into a production-ready tool for creating diverse, representative synthetic user population data.
 
 ![Diverse Persona Generator Screenshot](images/diverse-persona-generator.png)
 
@@ -24,18 +24,18 @@
 
 ## What is the "Diverse Persona Generator?"
 
-**Diverse Persona Generator** is a web application that lets you create **diverse populations of synthetic personas** — realistic virtual people with unique backgrounds, traits, attitudes, and behavioral patterns.
+**Diverse Persona Generator** is a web application that lets you create **diverse populations of synthetic personas** — data driven personas with unique backgrounds, traits, attitudes, and behavioral patterns.
 
-Imagine you are building:
+Use Cases:
 - A mental health chatbot and need to test it with 50 different types of users
 - An educational platform and want to understand how different students might interact
 - A social media app and need representative user profiles for testing
 
-**Diverse Persona Generator generates these personas for you** — not random, cookie-cutter profiles, but **maximally diverse populations** that cover the full spectrum of human variation. It uses a two-stage generation algorithm (inspired by Google DeepMind research) to ensure your persona population is statistically representative, not just a cluster of similar profiles.
+**Diverse Persona Generator generates the personas for you** — **maximally diverse populations** that cover the full spectrum of human variation. It uses a two-stage generation algorithm (inspired by Google DeepMind Alphafold research) to ensure your persona population is statistically representative, not just a cluster of similar profiles.
 
 ### The Core Idea
 
-Instead of manually writing 20 user personas (which tend to all look alike after the 5th one), you:
+Instead of manually writing 20 user personas you:
 1. **Define the scenario** (e.g., "Users of a mental health support chatbot")
 2. **Choose diversity axes** (e.g., Trust in AI, Symptom Severity, Tech Literacy)
 3. **Set population size** (5 to 100 personas)
@@ -43,21 +43,30 @@ Instead of manually writing 20 user personas (which tend to all look alike after
 
 ---
 
-## Why Should You Care?
+## Who is the intended Audience??
 
 ### For Product Managers & UX Researchers
-- **Stop the "5 personas trap"** — most teams create 5 personas and call it done. Diverse Persona Generator generates statistically diverse populations that surface edge cases you would never think of manually.
+
+- **Stop the "5 personas trap"** — most teams create 5 personas and call it done. The Diverse Persona Generator generates statistically diverse populations that surface edge cases.
+  
 - **Test inclusivity** — ensure your product works for rare combinations of traits (e.g., a highly tech-literate user with severe symptoms and low trust in AI).
+  
 - **Save weeks of work** — what takes a research team 2-3 weeks of interviews and synthesis takes 30 seconds with Diverse Persona Generator.
 
 ### For AI Engineers & Data Scientists
+
 - **Ground LLM evaluations in realistic populations** — test your model against 100 distinct persona types instead of generic prompts.
+  
 - **Generate training data** — synthetic personas can drive role-play conversations, preference datasets, and red-teaming scenarios.
+  
 - **Measure coverage** — the built-in diversity dashboard quantifies how well your population covers the possibility space.
 
 ### For Junior Developers Learning AI
-- **See research in action** — this app implements a real 2026 research paper from Google DeepMind with production-grade code.
+
+- **See research in action** — this app implements a 2026 research paper from Google DeepMind Alphafold with production-grade code.
+  
 - **Learn modern React patterns** — Zustand state management, Canvas 2D graphics, custom hooks, and cinematic UI effects.
+  
 - **Understand diversity metrics** — Coverage, Convex Hull Volume, KL Divergence, and more.
 
 ---
@@ -745,7 +754,7 @@ All versions were **verified live against the npm registry** using the `dependen
 ## Acknowledgments
 
 - **Research**: "Persona Generators: Generating Diverse Synthetic Personas at Scale" by Paglieri et al., Google DeepMind, 2026
-- **Architecture**: Built with the AI-Harness Engineering Toolkit (HET) methodology
+- **Architecture**: Built with the AI-Harness Engineering Toolkit (HET) methodology, by Gregory Kennedy
 - **Design**: Generator Dark aesthetic inspired by industrial-futurism color palettes
 - **Fonts**: [Outfit](https://fonts.google.com/specimen/Outfit) + [JetBrains Mono](https://fonts.google.com/specimen/JetBrains+Mono) via Google Fonts
 
