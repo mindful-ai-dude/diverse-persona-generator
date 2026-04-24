@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { usePersonaStore } from '../../stores/personaStore'
-import { Users, X, Eye, EyeOff, Download } from 'lucide-react'
+import { Users, X, Eye, EyeOff, Download, ZoomIn, ZoomOut } from 'lucide-react'
 import { exportAsText, exportAsMarkdown, exportAsPDF } from '../../utils/exportUtils'
 import type { Persona } from '../../types'
 
@@ -13,6 +13,7 @@ export default function PopulationExplorer() {
   const lastMouse = useRef({ x: 0, y: 0 })
   const [hoveredPersona, setHoveredPersona] = useState<Persona | null>(null)
   const [showLabels, setShowLabels] = useState(true)
+  const [zoom, setZoom] = useState(1)
   const sectionRef = useRef<HTMLElement>(null)
   const [isVisible, setIsVisible] = useState(false)
 
@@ -23,6 +24,7 @@ export default function PopulationExplorer() {
   const showLabelsRef = useRef(showLabels)
   const populationRef = useRef(population)
   const isDraggingRef = useRef(isDragging)
+  const zoomRef = useRef(zoom)
   const animFrameRef = useRef(0)
   const isVisibleRef = useRef(isVisible)
   const canvasSizeRef = useRef({ w: 0, h: 0, dpr: 1 })
@@ -32,12 +34,13 @@ export default function PopulationExplorer() {
   useEffect(() => { hoveredRef.current = hoveredPersona; needsRedrawRef.current = true }, [hoveredPersona])
   useEffect(() => { selectedRef.current = selectedPersona; needsRedrawRef.current = true }, [selectedPersona])
   useEffect(() => { showLabelsRef.current = showLabels; needsRedrawRef.current = true }, [showLabels])
-  useEffect(() => { 
-    populationRef.current = population 
+  useEffect(() => {
+    populationRef.current = population
     needsRedrawRef.current = true
   }, [population])
   useEffect(() => { isDraggingRef.current = isDragging }, [isDragging])
-  useEffect(() => { 
+  useEffect(() => { zoomRef.current = zoom; needsRedrawRef.current = true }, [zoom])
+  useEffect(() => {
     isVisibleRef.current = isVisible
     if (isVisible) needsRedrawRef.current = true
   }, [isVisible])
@@ -129,6 +132,7 @@ export default function PopulationExplorer() {
       const hovered = hoveredRef.current
       const selected = selectedRef.current
       const showLabels = showLabelsRef.current
+      const currentZoom = zoomRef.current
 
       // Resolve CSS custom properties — Canvas 2D API cannot use var() syntax
       const rootStyles = getComputedStyle(document.documentElement)
@@ -143,7 +147,8 @@ export default function PopulationExplorer() {
 
       const cx = w / 2
       const cy = h / 2
-      const scale = Math.min(w, h) / 2.5
+      // Base scale multiplied by zoom — controls how spread out the cloud is
+      const scale = (Math.min(w, h) / 2.5) * currentZoom
 
       // Clear
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
@@ -179,15 +184,16 @@ export default function PopulationExplorer() {
       // Sort by depth
       projected.sort((a, b) => a.z - b.z)
 
-      // Draw connections (limit to nearby pairs, skip if >50 personas)
+      // Draw connections (limit to nearby pairs, scale threshold with zoom)
       if (pop.length <= 50) {
+        const connThresh = 3600 * currentZoom * currentZoom // dist < 60*zoom
         ctx.strokeStyle = 'rgba(200, 169, 126, 0.03)'
         ctx.lineWidth = 0.5
         for (let i = 0; i < projected.length; i++) {
           for (let j = i + 1; j < projected.length; j++) {
             const dx = projected[i].x - projected[j].x
             const dy = projected[i].y - projected[j].y
-            if (dx * dx + dy * dy < 3600) { // dist < 60
+            if (dx * dx + dy * dy < connThresh) {
               ctx.beginPath()
               ctx.moveTo(projected[i].x, projected[i].y)
               ctx.lineTo(projected[j].x, projected[j].y)
@@ -197,11 +203,13 @@ export default function PopulationExplorer() {
         }
       }
 
-      // Draw points
+      // Draw points — node radius scales with zoom so circles grow/shrink
       projected.forEach((p) => {
         const isHovered = hovered?.id === p.persona.id
         const isSelected = selected?.id === p.persona.id
-        const size = 3 + (p.z + 1) * 2 + (isHovered ? 4 : 0) + (isSelected ? 4 : 0)
+        // Base size driven by depth; zoom scales the whole thing
+        const baseSize = 3 + (p.z + 1) * 2 + (isHovered ? 4 : 0) + (isSelected ? 4 : 0)
+        const size = baseSize * currentZoom
         const alpha = 0.4 + (p.z + 1) * 0.3
 
         // Glow
@@ -301,7 +309,7 @@ export default function PopulationExplorer() {
 
     const cx = rect.width / 2
     const cy = rect.height / 2
-    const scale = Math.min(rect.width, rect.height) / 2.5
+    const scale = (Math.min(rect.width, rect.height) / 2.5) * zoomRef.current
 
     const rot = rotationRef.current
     const cosY = Math.cos(rot.y)
@@ -310,7 +318,8 @@ export default function PopulationExplorer() {
     const sinX = Math.sin(rot.x)
 
     let closest: Persona | null = null
-    let closestDist = 20
+    // Hit radius scales with zoom so small nodes aren't impossible to click
+    let closestDist = Math.max(12, 20 * zoomRef.current)
 
     for (const p of pop) {
       const xv = ((p.values[axis1] || 50) / 100 - 0.5) * 2
@@ -337,6 +346,26 @@ export default function PopulationExplorer() {
   const handleClick = useCallback(() => {
     if (hoveredRef.current) setSelectedPersona(hoveredRef.current)
   }, [setSelectedPersona])
+
+  // Wheel zoom — attach as non-passive so we can preventDefault and stop page scroll
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container) return
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault()
+      // Normalize across deltaMode (pixels / lines / pages)
+      const delta = e.deltaMode === 1 ? e.deltaY * 20 : e.deltaMode === 2 ? e.deltaY * 200 : e.deltaY
+      // Exponential zoom for a smooth feel; clamp to [0.2, 4]
+      const factor = Math.exp(-delta * 0.002)
+      setZoom(z => Math.min(Math.max(z * factor, 0.2), 4))
+    }
+    container.addEventListener('wheel', onWheel, { passive: false })
+    return () => container.removeEventListener('wheel', onWheel)
+  }, [])
+
+  const handleZoomIn  = useCallback(() => setZoom(z => Math.min(z * 1.3, 4)),   [])
+  const handleZoomOut = useCallback(() => setZoom(z => Math.max(z / 1.3, 0.2)), [])
+  const handleZoomReset = useCallback(() => setZoom(1), [])
 
   if (population.length === 0) return null
 
@@ -417,15 +446,18 @@ export default function PopulationExplorer() {
               ref={canvasRef}
               style={{ width: '100%', height: '100%', display: 'block' }}
             />
+            {/* Top-right controls */}
             <div style={{
               position: 'absolute',
               top: '12px',
               right: '12px',
               display: 'flex',
-              gap: '8px'
+              alignItems: 'center',
+              gap: '6px'
             }}>
+              {/* Zoom out */}
               <button
-                onClick={() => setShowLabels(!showLabels)}
+                onClick={(e) => { e.stopPropagation(); handleZoomOut() }}
                 style={{
                   padding: '6px 10px',
                   background: 'rgba(0,0,0,0.5)',
@@ -433,13 +465,76 @@ export default function PopulationExplorer() {
                   borderRadius: '6px',
                   color: 'var(--muted)',
                   cursor: 'pointer',
-                  backdropFilter: 'blur(8px)'
+                  backdropFilter: 'blur(8px)',
+                  lineHeight: 0
                 }}
-                title="Toggle labels"
+                title="Zoom out (scroll wheel also works)"
+              >
+                <ZoomOut size={14} />
+              </button>
+
+              {/* Zoom % — click to reset to 100% */}
+              <button
+                onClick={(e) => { e.stopPropagation(); handleZoomReset() }}
+                style={{
+                  padding: '5px 8px',
+                  background: 'rgba(0,0,0,0.5)',
+                  border: '1px solid var(--border)',
+                  borderRadius: '6px',
+                  color: zoom === 1 ? 'var(--muted)' : 'var(--accent)',
+                  cursor: 'pointer',
+                  backdropFilter: 'blur(8px)',
+                  fontSize: '11px',
+                  fontFamily: "'JetBrains Mono', monospace",
+                  minWidth: '42px',
+                  textAlign: 'center'
+                }}
+                title="Click to reset zoom to 100%"
+              >
+                {Math.round(zoom * 100)}%
+              </button>
+
+              {/* Zoom in */}
+              <button
+                onClick={(e) => { e.stopPropagation(); handleZoomIn() }}
+                style={{
+                  padding: '6px 10px',
+                  background: 'rgba(0,0,0,0.5)',
+                  border: '1px solid var(--border)',
+                  borderRadius: '6px',
+                  color: 'var(--muted)',
+                  cursor: 'pointer',
+                  backdropFilter: 'blur(8px)',
+                  lineHeight: 0
+                }}
+                title="Zoom in (scroll wheel also works)"
+              >
+                <ZoomIn size={14} />
+              </button>
+
+              {/* Divider */}
+              <div style={{ width: '1px', height: '20px', background: 'var(--border)', opacity: 0.5 }} />
+
+              {/* Labels toggle */}
+              <button
+                onClick={(e) => { e.stopPropagation(); setShowLabels(!showLabels) }}
+                style={{
+                  padding: '6px 10px',
+                  background: 'rgba(0,0,0,0.5)',
+                  border: '1px solid var(--border)',
+                  borderRadius: '6px',
+                  color: 'var(--muted)',
+                  cursor: 'pointer',
+                  backdropFilter: 'blur(8px)',
+                  lineHeight: 0
+                }}
+                title="Toggle name labels"
               >
                 {showLabels ? <Eye size={14} /> : <EyeOff size={14} />}
               </button>
             </div>
+
+            {/* Bottom-left status */}
             <div style={{
               position: 'absolute',
               bottom: '12px',
@@ -448,7 +543,7 @@ export default function PopulationExplorer() {
               color: 'var(--muted)',
               fontFamily: "'JetBrains Mono', monospace"
             }}>
-              {population.length} personas | Drag to rotate
+              {population.length} personas | Drag to rotate | Scroll to zoom
             </div>
           </div>
 

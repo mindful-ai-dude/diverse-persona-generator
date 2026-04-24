@@ -293,13 +293,122 @@ Ollama Cloud (2026) is a managed inference service for models with the `:cloud` 
 
 **Setup:**
 1. Sign up / log in at [ollama.com](https://ollama.com)
-2. Grab your API key at [ollama.com/settings/keys](https://ollama.com/settings/keys)
-3. In Settings → AI Configuration → choose **Ollama Cloud**
-4. Paste your key and select a cloud model
+2. Authenticate your machine using a **Device Key** (see full instructions below)
+3. Grab your API key at [ollama.com/settings/keys](https://ollama.com/settings/keys)
+4. In Settings → AI Configuration → choose **Ollama Cloud**
+5. Paste your key and select a cloud model
 
-**Endpoint used:** `https://ollama.com/api/chat` (native Ollama format — CORS-enabled for browser apps)
+#### 🔑 Device Key Setup — macOS, Linux, Windows
 
-> **Note:** The OpenAI-compatible `/v1/chat/completions` path on `ollama.com` does not emit CORS headers for browser origins, so the app uses the native `/api/chat` endpoint instead.
+Device keys are SSH public keys that authorize your machine to access your Ollama Cloud account. They are added automatically when you run `ollama signin`, or you can add one manually.
+
+---
+
+##### macOS
+
+**Method A — Automatic (recommended)**
+
+```bash
+# 1. Install Ollama (skip if already installed)
+brew install ollama
+# or download the .dmg from https://ollama.com/download
+
+# 2. Sign in — opens your browser to authenticate
+ollama signin
+
+# 3. Verify cloud access
+ollama list
+```
+
+Ollama generates an `ssh-ed25519` key pair on your Mac and registers the public key with your account automatically. You will see it appear at [ollama.com/settings/keys](https://ollama.com/settings/keys).
+
+**Method B — Manual SSH key**
+
+```bash
+# 1. Check for an existing key (skip step 2 if this file exists)
+ls ~/.ssh/id_ed25519.pub
+
+# 2. Generate a new key if needed
+ssh-keygen -t ed25519 -C "my-macbook"
+
+# 3. Copy the public key to your clipboard
+pbcopy < ~/.ssh/id_ed25519.pub
+```
+
+Then go to [ollama.com/settings/keys](https://ollama.com/settings/keys) → **Add key** → paste → **Add key**.
+
+---
+
+##### Linux
+
+**Method A — Automatic (recommended)**
+
+```bash
+# 1. Install Ollama (skip if already installed)
+curl -fsSL https://ollama.com/install.sh | sh
+
+# 2. Sign in — follow the URL printed in the terminal if no browser opens
+ollama signin
+
+# 3. Verify cloud access
+ollama list
+```
+
+**Method B — Manual SSH key**
+
+```bash
+# 1. Check for an existing key
+ls ~/.ssh/id_ed25519.pub
+
+# 2. Generate a new key if needed
+ssh-keygen -t ed25519 -C "my-linux-machine"
+
+# 3. Print the public key — copy the output
+cat ~/.ssh/id_ed25519.pub
+```
+
+Then go to [ollama.com/settings/keys](https://ollama.com/settings/keys) → **Add key** → paste → **Add key**.
+
+---
+
+##### Windows
+
+**Method A — Automatic (recommended)**
+
+1. Download and install Ollama from [ollama.com/download](https://ollama.com/download).
+2. Open **Command Prompt** or **PowerShell** and run:
+   ```powershell
+   ollama signin
+   ```
+3. Your browser will open — log in to your Ollama account.
+4. Ollama registers your device key automatically.
+5. Verify with:
+   ```powershell
+   ollama list
+   ```
+
+**Method B — Manual SSH key**
+
+```powershell
+# 1. Check for an existing key
+Test-Path "$env:USERPROFILE\.ssh\id_ed25519.pub"
+
+# 2. Generate a new key if needed (run in PowerShell)
+ssh-keygen -t ed25519 -C "my-windows-pc"
+
+# 3. Copy the public key to clipboard
+Get-Content "$env:USERPROFILE\.ssh\id_ed25519.pub" | Set-Clipboard
+```
+
+Then go to [ollama.com/settings/keys](https://ollama.com/settings/keys) → **Add key** → paste → **Add key**.
+
+---
+
+> **After adding a device key**, grab your API key at [ollama.com/settings/keys](https://ollama.com/settings/keys) and paste it into the app's AI Configuration panel.
+
+**Endpoint used:** `http://localhost:11434/api/chat` (local Ollama daemon — routes `:cloud` models to `ollama.com` transparently)
+
+> **Why localhost?** Browsers block direct cross-origin requests to `ollama.com` (CORS). The correct pattern is to run `ollama signin` once, then let the local daemon proxy cloud requests — it handles auth itself with no Bearer token needed in the app.
 
 **Available cloud models (quick-select chips in the UI):**
 
@@ -316,10 +425,10 @@ Ollama Cloud (2026) is a managed inference service for models with the `:cloud` 
 ```typescript
 // How the adapter connects
 const client = new OllamaCloudAdapter()
-// host: "https://ollama.com"
-// Authorization: "Bearer YOUR_OLLAMA_API_KEY"
-// endpoint: /api/chat (native Ollama format, CORS-enabled)
+// endpoint: http://localhost:11434/api/chat  (local daemon, CORS-safe)
+// auth: handled by `ollama signin` session on the daemon; API key optional
 // request body: { model, messages, stream: false, options: { temperature, num_predict } }
+// the daemon transparently routes kimi-k2.6:cloud → ollama.com
 ```
 
 ---
@@ -588,7 +697,11 @@ Your API key is missing, invalid, or expired. For OpenRouter the key format is `
 The model name is incorrect. Use the quick-select chips in the settings panel for verified model IDs.
 
 **Ollama Cloud: "Failed to fetch" or connection refused**  
-Ensure you have an active Ollama account with cloud access (Free, Pro, or Max plan). The app calls `https://ollama.com/api/chat` (native Ollama endpoint). If you see "Failed to fetch", verify your API key is entered — the endpoint requires `Authorization: Bearer <key>`.
+The app routes cloud models through your local Ollama daemon (`localhost:11434`), not directly to `ollama.com` (which blocks browser CORS requests). Fix checklist:
+1. Install the Ollama app: [ollama.com/download](https://ollama.com/download)
+2. Run `ollama signin` in your terminal (one-time auth)
+3. Confirm Ollama is running: `ollama list` should show cloud models
+4. In AI Configuration, leave the API Key field blank (daemon handles auth) or paste a key from [ollama.com/settings/keys](https://ollama.com/settings/keys)
 
 **Local Ollama: connection refused**  
 Ensure Ollama is running locally:
