@@ -78,7 +78,7 @@ Diverse-Persona-Generator/
 ├── start.sh              # One-command startup script
 ├── stop.sh               # Graceful shutdown script
 ├── package.json          # Dependencies (verified live against npm)
-├── vite.config.ts        # Vite 8 config (Oxc, no Babel)
+├── vite.config.ts        # Vite 8 config (Oxc-Rust Compiler)
 ├── tsconfig.json         # TypeScript strict mode
 ├── index.html            # Entry point with Google Fonts
 ├── src/
