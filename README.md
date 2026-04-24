@@ -73,7 +73,7 @@ Instead of manually writing 20 user personas you:
 
 ## The Research Behind It
 
-Diverse Persona Generator is based on the paper:
+The Diverse Persona Generator was architected and engineered by Gregory Kennedy and is based on the Google DeepMind research paper:
 
 > **"Persona Generators: Generating Diverse Synthetic Personas at Scale"**  
 > Authors: Paglieri et al., Google DeepMind  
