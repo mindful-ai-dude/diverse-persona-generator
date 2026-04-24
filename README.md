@@ -1,6 +1,6 @@
-# Diverse Persona Generator "Deterministic" and "Probablistic" 
+# Diverse Persona Generator 
 
-> **Generating Diverse Synthetic Personas at Scale** — An interactive, web application that transforms cutting-edge AI research into a production-ready tool for creating diverse, representative synthetic user population data.
+> **Generating "Deterministic" and "Probablistic" Diverse Synthetic Personas at Scale** — An interactive, web application that transforms cutting-edge AI research into a production-ready tool for creating diverse, representative synthetic user population data.
 
 ![Diverse Persona Generator Screenshot](images/diverse-persona-generator.png)
 
