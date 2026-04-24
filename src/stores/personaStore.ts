@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import type { Persona, DiversityMetrics, GenerationConfig, DiversityAxis } from '../types'
+import type { AIProvider } from '../types/ai'
 
 interface PersonaState {
   config: GenerationConfig
@@ -23,6 +24,8 @@ interface PersonaState {
   removeAxis: (id: string) => void
   setAIConfig: (aiConfig: GenerationConfig['aiConfig']) => void
   setGenerationMode: (mode: 'deterministic' | 'ai') => void
+  firecrawlApiKey: string
+  setFirecrawlApiKey: (key: string) => void
 }
 
 const defaultAxes: DiversityAxis[] = [
@@ -62,9 +65,10 @@ export const usePersonaStore = create<PersonaState>((set) => ({
     mode: 'deterministic',
     aiConfig: {
       enabled: false,
-      provider: 'openrouter',
+      // Ollama Cloud is the primary provider (April 2026)
+      provider: 'ollama' as AIProvider,
       apiKey: '',
-      model: 'google/gemma-4-31b-it:free',
+      model: 'kimi-k2.6:cloud',
       temperature: 0.7,
       maxTokens: 1000
     }
@@ -96,5 +100,7 @@ export const usePersonaStore = create<PersonaState>((set) => ({
   })),
   setGenerationMode: (mode) => set((state) => ({
     config: { ...state.config, mode }
-  }))
+  })),
+  firecrawlApiKey: '',
+  setFirecrawlApiKey: (firecrawlApiKey) => set({ firecrawlApiKey })
 }))

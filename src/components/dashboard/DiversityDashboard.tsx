@@ -62,7 +62,7 @@ export default function DiversityDashboard() {
     )
     if (sectionRef.current) observer.observe(sectionRef.current)
     return () => observer.disconnect()
-  }, [])
+  }, [metrics])
 
   if (!metrics) return null
 

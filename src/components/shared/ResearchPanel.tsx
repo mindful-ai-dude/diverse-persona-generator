@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { Search, BookOpen, ExternalLink, Loader2 } from 'lucide-react'
+import { Search, BookOpen, ExternalLink, Loader2, AlertCircle } from 'lucide-react'
+import { usePersonaStore } from '../../stores/personaStore'
 
 interface ResearchResult {
   title: string
@@ -12,42 +13,58 @@ export default function ResearchPanel() {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<ResearchResult[]>([])
   const [isSearching, setIsSearching] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  
+  const { firecrawlApiKey, setShowSettings } = usePersonaStore()
 
   const handleSearch = async () => {
     if (!query.trim()) return
-    setIsSearching(true)
     
-    // Simulated research results based on Firecrawl search patterns
-    // In production, this would call Firecrawl MCP
-    setTimeout(() => {
-      setResults([
-        {
-          title: 'Generative Agent-Based Modeling for Diverse Personas',
-          snippet: 'Recent advances in using LLMs as mutation operators within evolutionary search loops to optimize persona generation functions...',
-          url: 'https://arxiv.org/abs/2602.03545',
-          source: 'arXiv'
+    if (!firecrawlApiKey) {
+      setError('Please configure your Firecrawl API key in settings.')
+      return
+    }
+    
+    setIsSearching(true)
+    setError(null)
+    
+    try {
+      const response = await fetch('https://api.firecrawl.dev/v2/search', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${firecrawlApiKey}`,
+          'Content-Type': 'application/json'
         },
-        {
-          title: 'AlphaEvolve: Scaling Evolutionary Algorithms with LLMs',
-          snippet: 'AlphaEvolve uses LLMs as mutation operators within large-population evolutionary search to discover novel algorithms...',
-          url: 'https://deepmind.google/discover/blog/alphaevolve/',
-          source: 'DeepMind Blog'
-        },
-        {
-          title: 'Concordia: A Library for Multi-Agent LLM Simulations',
-          snippet: 'Concordia enables complex social simulations where a game-master mediates interactions between agents...',
-          url: 'https://github.com/google-deepmind/concordia',
-          source: 'GitHub'
-        },
-        {
-          title: 'Algorithmic Fidelity in Synthetic Populations',
-          snippet: 'Measuring how accurately LLMs reproduce beliefs, attitudes, and response patterns for specific sub-populations...',
-          url: 'https://doi.org/10.1016/j.jhealecon.2024',
-          source: 'Journal of Behavioral Economics'
-        }
-      ])
+        body: JSON.stringify({
+          query,
+          limit: 5,
+          sources: ['web']
+        })
+      })
+      
+      const data = await response.json()
+      
+      if (!response.ok) {
+        throw new Error(data.error || data.warning || 'Failed to fetch research results')
+      }
+      
+      if (data.success && data.data && data.data.web) {
+        const mappedResults: ResearchResult[] = data.data.web.map((item: any) => ({
+          title: item.title || 'Untitled',
+          snippet: item.description || 'No description available.',
+          url: item.url,
+          source: new URL(item.url).hostname.replace('www.', '')
+        }))
+        setResults(mappedResults)
+      } else {
+        setResults([])
+      }
+    } catch (err) {
+      console.error('Firecrawl API error:', err)
+      setError(err instanceof Error ? err.message : 'An unexpected error occurred')
+    } finally {
       setIsSearching(false)
-    }, 1500)
+    }
   }
 
   return (
@@ -79,6 +96,40 @@ export default function ResearchPanel() {
           {isSearching ? <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} /> : <Search size={16} />}
         </button>
       </div>
+
+      {error && (
+        <div style={{
+          padding: '12px',
+          background: 'rgba(239, 68, 68, 0.1)',
+          border: '1px solid rgba(239, 68, 68, 0.2)',
+          borderRadius: '8px',
+          color: '#ef4444',
+          fontSize: '13px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          marginBottom: '16px'
+        }}>
+          <AlertCircle size={16} />
+          <div style={{ flex: 1 }}>{error}</div>
+          {error.includes('configure') && (
+            <button
+              onClick={() => setShowSettings(true)}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: 'currentColor',
+                textDecoration: 'underline',
+                cursor: 'pointer',
+                fontSize: '13px',
+                padding: 0
+              }}
+            >
+              Open Settings
+            </button>
+          )}
+        </div>
+      )}
 
       {results.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>

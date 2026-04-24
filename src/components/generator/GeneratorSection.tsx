@@ -89,8 +89,13 @@ export default function GeneratorSection() {
       // Scroll to explorer after a short delay to allow React to render
       requestAnimationFrame(() => {
         setTimeout(() => {
-          document.getElementById('explorer')?.scrollIntoView({ behavior: 'smooth' })
-        }, 100)
+          const el = document.getElementById('explorer')
+          if (el) {
+            el.scrollIntoView({ behavior: 'smooth' })
+            // Trigger resize so the canvas can measure itself
+            window.dispatchEvent(new Event('resize'))
+          }
+        }, 300)
       })
     } catch (err) {
       console.error('[Generator] Generation failed:', err)

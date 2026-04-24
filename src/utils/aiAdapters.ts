@@ -2,16 +2,30 @@ import type { AIAdapter, AIProviderConfig } from '../types/ai'
 
 /**
  * Base OpenAI-compatible adapter
- * OpenRouter, Ollama Cloud, and Generic providers all use the same request format
+ * OpenRouter, Ollama Cloud, Local Ollama, and Generic providers all use the same request format
  */
 abstract class BaseOpenAIAdapter implements AIAdapter {
   protected async makeRequest(url: string, apiKey: string, body: object): Promise<Response> {
+    let cleanKey = (apiKey || '').trim()
+    cleanKey = cleanKey.replace(/^[\"']|[\"']$/g, '') // remove surrounding quotes
+    if (cleanKey.toLowerCase().startsWith('bearer ')) {
+      cleanKey = cleanKey.slice(7).trim()
+    }
+
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${cleanKey}`
+    }
+
+    // OpenRouter optional ranking headers
+    if (url.includes('openrouter.ai')) {
+      headers['HTTP-Referer'] = typeof window !== 'undefined' ? window.location.href : 'http://localhost:4321'
+      headers['X-OpenRouter-Title'] = 'Diverse Persona Generator'
+    }
+
     return fetch(url, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
-      },
+      headers,
       body: JSON.stringify(body)
     })
   }
@@ -21,7 +35,8 @@ abstract class BaseOpenAIAdapter implements AIAdapter {
       model: config.model,
       messages: [{ role: 'user', content: prompt }],
       temperature: config.temperature ?? 0.7,
-      max_tokens: config.maxTokens ?? 1000
+      max_tokens: config.maxTokens ?? 1000,
+      stream: false
     })
 
     if (!response.ok) {
@@ -38,8 +53,9 @@ abstract class BaseOpenAIAdapter implements AIAdapter {
 }
 
 /**
- * OpenRouter adapter
- * Uses model format: provider/model (e.g., google/gemma-4-31b-it:free)
+ * OpenRouter adapter — OpenAI-compatible gateway
+ * Model format: provider/model  (e.g., moonshotai/kimi-k2.5)
+ * Endpoint: https://openrouter.ai/api/v1/chat/completions
  */
 export class OpenRouterAdapter extends BaseOpenAIAdapter {
   getEndpoint(): string {
@@ -47,8 +63,7 @@ export class OpenRouterAdapter extends BaseOpenAIAdapter {
   }
 
   validateConfig(config: AIProviderConfig): boolean {
-    // OpenRouter model format: provider/model
-    return /^[a-zA-Z0-9_-]+\/[a-zA-Z0-9_.-]+$/.test(config.model)
+    return typeof config.model === 'string' && config.model.includes('/')
   }
 
   async fetchModels(apiKey: string): Promise<string[]> {
@@ -66,23 +81,69 @@ export class OpenRouterAdapter extends BaseOpenAIAdapter {
 }
 
 /**
- * Ollama Cloud adapter
- * Uses model format: model:tag (e.g., kimi-k2.6:cloud)
+ * Ollama Cloud adapter — managed cloud inference (no local GPU needed)
+ * Uses the OpenAI-compatible /v1/chat/completions endpoint on ollama.com
+ * Requires an Ollama API key from ollama.com/settings/keys
+ * Model format: model:cloud  (e.g., kimi-k2.6:cloud)
+ *
+ * Per Ollama Cloud docs (April 2026):
+ *   host: "https://ollama.com"
+ *   Authorization: Bearer <OLLAMA_API_KEY>
+ *   Endpoint: https://ollama.com/v1/chat/completions  (OpenAI-compatible)
  */
 export class OllamaCloudAdapter extends BaseOpenAIAdapter {
   getEndpoint(): string {
-    return 'https://ollama.com/api/chat'
+    // Use the OpenAI-compatible endpoint so the standard request body
+    // (model, messages, temperature, max_tokens, stream) is understood correctly.
+    return 'https://ollama.com/v1/chat/completions'
   }
 
   validateConfig(config: AIProviderConfig): boolean {
-    // Ollama model format: model:tag
-    return /^[a-zA-Z0-9_-]+:[a-zA-Z0-9_.-]+$/.test(config.model)
+    // Ollama models: "model", "model:tag", or "registry/model:tag"
+    return typeof config.model === 'string' && config.model.trim().length > 0
+  }
+}
+
+/**
+ * Local Ollama adapter — Ollama running on the user's own machine
+ * Uses Ollama's OpenAI-compatible /v1/chat/completions endpoint
+ * Default host: http://localhost:11434
+ * No API key required for local usage.
+ */
+export class LocalOllamaAdapter extends BaseOpenAIAdapter {
+  getEndpoint(config: AIProviderConfig): string {
+    // Allow the user to override the host; fall back to standard local Ollama
+    return config.baseUrl || 'http://localhost:11434/v1/chat/completions'
+  }
+
+  validateConfig(config: AIProviderConfig): boolean {
+    return typeof config.model === 'string' && config.model.trim().length > 0
+  }
+
+  // Override makeRequest: local Ollama doesn't need an Authorization header
+  // but won't break if one is sent with an empty key.
+  protected async makeRequest(url: string, apiKey: string, body: object): Promise<Response> {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json'
+    }
+    // Add auth header only if an API key was provided (some secured local setups use one)
+    if (apiKey && apiKey.trim()) {
+      let cleanKey = apiKey.trim().replace(/^[\"']|[\"']$/g, '')
+      if (cleanKey.toLowerCase().startsWith('bearer ')) cleanKey = cleanKey.slice(7).trim()
+      headers['Authorization'] = `Bearer ${cleanKey}`
+    }
+
+    return fetch(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body)
+    })
   }
 }
 
 /**
  * Generic OpenAI-compatible adapter
- * User provides their own base URL
+ * User provides their own full endpoint URL.
  */
 export class GenericOpenAIAdapter extends BaseOpenAIAdapter {
   getEndpoint(config: AIProviderConfig): string {
@@ -95,14 +156,16 @@ export class GenericOpenAIAdapter extends BaseOpenAIAdapter {
 }
 
 /**
- * Factory to get the correct adapter for a provider
+ * Factory: return the correct adapter for a given provider key
  */
 export function getAdapter(provider: string): AIAdapter {
   switch (provider) {
-    case 'openrouter':
-      return new OpenRouterAdapter()
     case 'ollama':
       return new OllamaCloudAdapter()
+    case 'openrouter':
+      return new OpenRouterAdapter()
+    case 'local-ollama':
+      return new LocalOllamaAdapter()
     case 'generic':
       return new GenericOpenAIAdapter()
     default:
@@ -111,20 +174,21 @@ export function getAdapter(provider: string): AIAdapter {
 }
 
 /**
- * Test connection to an AI provider
+ * Test connection to an AI provider by sending a minimal prompt
  */
-export async function testConnection(config: AIProviderConfig): Promise<{ success: boolean; latency: number; error?: string }> {
+export async function testConnection(
+  config: AIProviderConfig
+): Promise<{ success: boolean; latency: number; error?: string }> {
   const startTime = performance.now()
   try {
     const adapter = getAdapter(config.provider)
     if (!adapter.validateConfig(config)) {
-      return { success: false, latency: 0, error: 'Invalid configuration' }
+      return { success: false, latency: 0, error: 'Invalid configuration — check model and API key.' }
     }
 
-    // Send a simple test prompt
     await adapter.generate(
-      { ...config, maxTokens: 5 },
-      'Hello'
+      { ...config, maxTokens: 10 },
+      'Hi'
     )
 
     const latency = Math.round(performance.now() - startTime)

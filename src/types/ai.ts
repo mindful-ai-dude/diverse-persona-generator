@@ -1,4 +1,4 @@
-export type AIProvider = 'openrouter' | 'ollama' | 'generic'
+export type AIProvider = 'ollama' | 'openrouter' | 'local-ollama' | 'generic'
 
 export interface AIProviderConfig {
   provider: AIProvider

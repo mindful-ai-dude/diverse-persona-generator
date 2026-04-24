@@ -1,3 +1,5 @@
+import type { AIProvider } from './ai'
+
 export interface DiversityAxis {
   id: string;
   name: string;
@@ -51,7 +53,7 @@ export interface GenerationConfig {
   mode?: 'deterministic' | 'ai';
   aiConfig?: {
     enabled: boolean;
-    provider: 'openrouter' | 'ollama' | 'generic';
+    provider: AIProvider;
     apiKey: string;
     model: string;
     baseUrl?: string;

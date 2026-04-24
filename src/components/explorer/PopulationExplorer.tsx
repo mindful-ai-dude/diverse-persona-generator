@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { usePersonaStore } from '../../stores/personaStore'
-import { Users, X, Eye, EyeOff } from 'lucide-react'
+import { Users, X, Eye, EyeOff, Download } from 'lucide-react'
+import { exportAsText, exportAsMarkdown, exportAsPDF } from '../../utils/exportUtils'
 import type { Persona } from '../../types'
 
 export default function PopulationExplorer() {
-  const { population, selectedPersona, setSelectedPersona } = usePersonaStore()
+  const { population, config, selectedPersona, setSelectedPersona } = usePersonaStore()
   const containerRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [rotation, setRotation] = useState({ x: 0.3, y: 0 })
@@ -27,16 +28,19 @@ export default function PopulationExplorer() {
   const canvasSizeRef = useRef({ w: 0, h: 0, dpr: 1 })
   const needsRedrawRef = useRef(true)
 
-  useEffect(() => { rotationRef.current = rotation }, [rotation])
-  useEffect(() => { hoveredRef.current = hoveredPersona }, [hoveredPersona])
-  useEffect(() => { selectedRef.current = selectedPersona }, [selectedPersona])
-  useEffect(() => { showLabelsRef.current = showLabels }, [showLabels])
+  useEffect(() => { rotationRef.current = rotation; needsRedrawRef.current = true }, [rotation])
+  useEffect(() => { hoveredRef.current = hoveredPersona; needsRedrawRef.current = true }, [hoveredPersona])
+  useEffect(() => { selectedRef.current = selectedPersona; needsRedrawRef.current = true }, [selectedPersona])
+  useEffect(() => { showLabelsRef.current = showLabels; needsRedrawRef.current = true }, [showLabels])
   useEffect(() => { 
     populationRef.current = population 
     needsRedrawRef.current = true
   }, [population])
   useEffect(() => { isDraggingRef.current = isDragging }, [isDragging])
-  useEffect(() => { isVisibleRef.current = isVisible }, [isVisible])
+  useEffect(() => { 
+    isVisibleRef.current = isVisible
+    if (isVisible) needsRedrawRef.current = true
+  }, [isVisible])
 
   // Intersection observer for visibility
   useEffect(() => {
@@ -46,7 +50,7 @@ export default function PopulationExplorer() {
     )
     if (sectionRef.current) observer.observe(sectionRef.current)
     return () => observer.disconnect()
-  }, [])
+  }, [population.length])
 
   // Canvas resize — only on mount and window resize, NOT inside rAF
   const resizeCanvas = useCallback(() => {
@@ -62,13 +66,20 @@ export default function PopulationExplorer() {
       canvas.width = w * dpr
       canvas.height = h * dpr
       canvasSizeRef.current = { w, h, dpr }
+      needsRedrawRef.current = true
     }
   }, [])
 
   useEffect(() => {
     resizeCanvas()
+    // Re-measure after a short delay to handle cases where container
+    // hasn't painted yet (opacity: 0 → 1 transition)
+    const timer = setTimeout(resizeCanvas, 200)
     window.addEventListener('resize', resizeCanvas)
-    return () => window.removeEventListener('resize', resizeCanvas)
+    return () => {
+      clearTimeout(timer)
+      window.removeEventListener('resize', resizeCanvas)
+    }
   }, [resizeCanvas])
 
   // Animation loop — single rAF, reads everything from refs
@@ -118,6 +129,11 @@ export default function PopulationExplorer() {
       const hovered = hoveredRef.current
       const selected = selectedRef.current
       const showLabels = showLabelsRef.current
+
+      // Resolve CSS custom properties — Canvas 2D API cannot use var() syntax
+      const rootStyles = getComputedStyle(document.documentElement)
+      const textColor = rootStyles.getPropertyValue('--text').trim() || '#eae7e2'
+      const mutedColor = rootStyles.getPropertyValue('--muted').trim() || '#5a5a5e'
 
       // Get axes
       const axes = Object.keys(pop[0]?.values || {})
@@ -212,7 +228,7 @@ export default function PopulationExplorer() {
         // Label
         if (showLabels && (isHovered || isSelected)) {
           ctx.font = '11px "JetBrains Mono", monospace'
-          ctx.fillStyle = 'var(--text)'
+          ctx.fillStyle = textColor
           ctx.textAlign = 'center'
           ctx.fillText(p.persona.name.split(' ')[0], p.x, p.y - size - 8)
         }
@@ -220,7 +236,7 @@ export default function PopulationExplorer() {
 
       // Axis labels
       ctx.font = '12px "Outfit", sans-serif'
-      ctx.fillStyle = 'var(--muted)'
+      ctx.fillStyle = mutedColor
       ctx.textAlign = 'center'
       ctx.fillText(axis1, cx, h - 16)
       ctx.save()
@@ -343,9 +359,38 @@ export default function PopulationExplorer() {
         <h2 className="dpg-heading" style={{ fontSize: 'clamp(28px, 4vw, 48px)' }}>
           Meet the <span>Population</span>
         </h2>
-        <p className="dpg-subheading" style={{ marginBottom: '32px' }}>
-          Interactive 3D scatter plot of your generated personas. Drag to rotate, hover to preview, click to select.
-        </p>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '16px', marginBottom: '32px' }}>
+          <p className="dpg-subheading" style={{ margin: 0, maxWidth: '600px' }}>
+            Interactive 3D scatter plot of your generated personas. Drag to rotate, hover to preview, click to select.
+          </p>
+          
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button
+              className="dpg-btn"
+              onClick={() => exportAsText(population, config)}
+              style={{ padding: '8px 16px', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}
+              title="Download as Text file"
+            >
+              <Download size={14} /> TXT
+            </button>
+            <button
+              className="dpg-btn"
+              onClick={() => exportAsMarkdown(population, config)}
+              style={{ padding: '8px 16px', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}
+              title="Download as Markdown file"
+            >
+              <Download size={14} /> MD
+            </button>
+            <button
+              className="dpg-btn"
+              onClick={() => exportAsPDF(population, config)}
+              style={{ padding: '8px 16px', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}
+              title="Download as PDF document"
+            >
+              <Download size={14} /> PDF
+            </button>
+          </div>
+        </div>
 
         <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
           {/* 3D Canvas */}
