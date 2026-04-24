@@ -293,9 +293,118 @@ Ollama Cloud (2026) is a managed inference service for models with the `:cloud` 
 
 **Setup:**
 1. Sign up / log in at [ollama.com](https://ollama.com)
-2. Grab your API key at [ollama.com/settings/keys](https://ollama.com/settings/keys)
-3. In Settings → AI Configuration → choose **Ollama Cloud**
-4. Paste your key and select a cloud model
+2. Authenticate your machine using a **Device Key** (see full instructions below)
+3. Grab your API key at [ollama.com/settings/keys](https://ollama.com/settings/keys)
+4. In Settings → AI Configuration → choose **Ollama Cloud**
+5. Paste your key and select a cloud model
+
+#### 🔑 Device Key Setup — macOS, Linux, Windows
+
+Device keys are SSH public keys that authorize your machine to access your Ollama Cloud account. They are added automatically when you run `ollama signin`, or you can add one manually.
+
+---
+
+##### macOS
+
+**Method A — Automatic (recommended)**
+
+```bash
+# 1. Install Ollama (skip if already installed)
+brew install ollama
+# or download the .dmg from https://ollama.com/download
+
+# 2. Sign in — opens your browser to authenticate
+ollama signin
+
+# 3. Verify cloud access
+ollama list
+```
+
+Ollama generates an `ssh-ed25519` key pair on your Mac and registers the public key with your account automatically. You will see it appear at [ollama.com/settings/keys](https://ollama.com/settings/keys).
+
+**Method B — Manual SSH key**
+
+```bash
+# 1. Check for an existing key (skip step 2 if this file exists)
+ls ~/.ssh/id_ed25519.pub
+
+# 2. Generate a new key if needed
+ssh-keygen -t ed25519 -C "my-macbook"
+
+# 3. Copy the public key to your clipboard
+pbcopy < ~/.ssh/id_ed25519.pub
+```
+
+Then go to [ollama.com/settings/keys](https://ollama.com/settings/keys) → **Add key** → paste → **Add key**.
+
+---
+
+##### Linux
+
+**Method A — Automatic (recommended)**
+
+```bash
+# 1. Install Ollama (skip if already installed)
+curl -fsSL https://ollama.com/install.sh | sh
+
+# 2. Sign in — follow the URL printed in the terminal if no browser opens
+ollama signin
+
+# 3. Verify cloud access
+ollama list
+```
+
+**Method B — Manual SSH key**
+
+```bash
+# 1. Check for an existing key
+ls ~/.ssh/id_ed25519.pub
+
+# 2. Generate a new key if needed
+ssh-keygen -t ed25519 -C "my-linux-machine"
+
+# 3. Print the public key — copy the output
+cat ~/.ssh/id_ed25519.pub
+```
+
+Then go to [ollama.com/settings/keys](https://ollama.com/settings/keys) → **Add key** → paste → **Add key**.
+
+---
+
+##### Windows
+
+**Method A — Automatic (recommended)**
+
+1. Download and install Ollama from [ollama.com/download](https://ollama.com/download).
+2. Open **Command Prompt** or **PowerShell** and run:
+   ```powershell
+   ollama signin
+   ```
+3. Your browser will open — log in to your Ollama account.
+4. Ollama registers your device key automatically.
+5. Verify with:
+   ```powershell
+   ollama list
+   ```
+
+**Method B — Manual SSH key**
+
+```powershell
+# 1. Check for an existing key
+Test-Path "$env:USERPROFILE\.ssh\id_ed25519.pub"
+
+# 2. Generate a new key if needed (run in PowerShell)
+ssh-keygen -t ed25519 -C "my-windows-pc"
+
+# 3. Copy the public key to clipboard
+Get-Content "$env:USERPROFILE\.ssh\id_ed25519.pub" | Set-Clipboard
+```
+
+Then go to [ollama.com/settings/keys](https://ollama.com/settings/keys) → **Add key** → paste → **Add key**.
+
+---
+
+> **After adding a device key**, grab your API key at [ollama.com/settings/keys](https://ollama.com/settings/keys) and paste it into the app's AI Configuration panel.
 
 **Endpoint used:** `https://ollama.com/api/chat` (native Ollama format — CORS-enabled for browser apps)
 
