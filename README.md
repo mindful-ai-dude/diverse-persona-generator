@@ -297,7 +297,9 @@ Ollama Cloud (2026) is a managed inference service for models with the `:cloud` 
 3. In Settings → AI Configuration → choose **Ollama Cloud**
 4. Paste your key and select a cloud model
 
-**Endpoint used:** `https://ollama.com/v1/chat/completions` (OpenAI-compatible)
+**Endpoint used:** `https://ollama.com/api/chat` (native Ollama format — CORS-enabled for browser apps)
+
+> **Note:** The OpenAI-compatible `/v1/chat/completions` path on `ollama.com` does not emit CORS headers for browser origins, so the app uses the native `/api/chat` endpoint instead.
 
 **Available cloud models (quick-select chips in the UI):**
 
@@ -316,7 +318,8 @@ Ollama Cloud (2026) is a managed inference service for models with the `:cloud` 
 const client = new OllamaCloudAdapter()
 // host: "https://ollama.com"
 // Authorization: "Bearer YOUR_OLLAMA_API_KEY"
-// endpoint: /v1/chat/completions (OpenAI-compatible)
+// endpoint: /api/chat (native Ollama format, CORS-enabled)
+// request body: { model, messages, stream: false, options: { temperature, num_predict } }
 ```
 
 ---
@@ -578,14 +581,14 @@ If TypeScript errors appear, they are usually related to missing types. Ensure `
 
 ### AI connection issues
 
-**"AI request failed: 401"**  
-Your API key is invalid or expired. Double-check it on the provider's keys page.
+**"AI request failed: 401"** or **"Missing Authentication header"**  
+Your API key is missing, invalid, or expired. For OpenRouter the key format is `sk-or-v1-...`. Double-check it at the provider's keys page. OpenRouter returns "Missing Authentication header" for both empty and invalid keys.
 
 **"AI request failed: 404"**  
 The model name is incorrect. Use the quick-select chips in the settings panel for verified model IDs.
 
-**Ollama Cloud: connection refused**  
-Ensure you have an active Ollama account with cloud access (Free, Pro, or Max plan). The endpoint is `https://ollama.com/v1/chat/completions`.
+**Ollama Cloud: "Failed to fetch" or connection refused**  
+Ensure you have an active Ollama account with cloud access (Free, Pro, or Max plan). The app calls `https://ollama.com/api/chat` (native Ollama endpoint). If you see "Failed to fetch", verify your API key is entered — the endpoint requires `Authorization: Bearer <key>`.
 
 **Local Ollama: connection refused**  
 Ensure Ollama is running locally:

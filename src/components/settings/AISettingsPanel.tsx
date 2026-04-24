@@ -25,7 +25,7 @@ const PROVIDERS: {
   {
     id: 'ollama',
     label: 'Ollama Cloud',
-    hint: 'Primary provider — cloud inference, no local GPU needed.',
+    hint: 'Primary provider — cloud inference, no local GPU needed. Uses https://ollama.com/api/chat',
     keyHint: 'Get your key at ollama.com/settings/keys',
     keyLink: 'https://ollama.com/settings/keys',
     modelHint: 'Format: model:cloud  (e.g., kimi-k2.6:cloud, gemma4:31b-cloud)',
@@ -35,8 +35,8 @@ const PROVIDERS: {
   {
     id: 'openrouter',
     label: 'OpenRouter',
-    hint: 'OpenAI-compatible gateway to hundreds of models.',
-    keyHint: 'Get your key at openrouter.ai/keys',
+    hint: 'OpenAI-compatible gateway to hundreds of models. Key format: sk-or-v1-...',
+    keyHint: 'Get your key at openrouter.ai/keys (format: sk-or-v1-...)',
     keyLink: 'https://openrouter.ai/keys',
     modelHint: 'Format: provider/model  (e.g., moonshotai/kimi-k2.5)',
     defaultModel: 'moonshotai/kimi-k2.5',

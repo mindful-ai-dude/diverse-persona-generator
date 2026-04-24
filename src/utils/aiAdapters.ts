@@ -2,7 +2,7 @@ import type { AIAdapter, AIProviderConfig } from '../types/ai'
 
 /**
  * Base OpenAI-compatible adapter
- * OpenRouter, Ollama Cloud, Local Ollama, and Generic providers all use the same request format
+ * OpenRouter, Local Ollama, and Generic providers all use the same request format
  */
 abstract class BaseOpenAIAdapter implements AIAdapter {
   protected async makeRequest(url: string, apiKey: string, body: object): Promise<Response> {
@@ -14,13 +14,9 @@ abstract class BaseOpenAIAdapter implements AIAdapter {
 
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${cleanKey}`
     }
-
-    // OpenRouter optional ranking headers
-    if (url.includes('openrouter.ai')) {
-      headers['HTTP-Referer'] = typeof window !== 'undefined' ? window.location.href : 'http://localhost:4321'
-      headers['X-OpenRouter-Title'] = 'Diverse Persona Generator'
+    if (cleanKey) {
+      headers['Authorization'] = `Bearer ${cleanKey}`
     }
 
     return fetch(url, {
@@ -41,6 +37,14 @@ abstract class BaseOpenAIAdapter implements AIAdapter {
 
     if (!response.ok) {
       const errorText = await response.text()
+      // Try to parse a structured error message from providers like OpenRouter
+      try {
+        const errJson = JSON.parse(errorText)
+        const msg = errJson?.error?.message || errJson?.message
+        if (msg) throw new Error(`AI request failed: ${response.status} — ${msg}`)
+      } catch (parseErr) {
+        if (parseErr instanceof Error && parseErr.message.startsWith('AI request failed')) throw parseErr
+      }
       throw new Error(`AI request failed: ${response.status} ${response.statusText} - ${errorText}`)
     }
 
@@ -56,6 +60,8 @@ abstract class BaseOpenAIAdapter implements AIAdapter {
  * OpenRouter adapter — OpenAI-compatible gateway
  * Model format: provider/model  (e.g., moonshotai/kimi-k2.5)
  * Endpoint: https://openrouter.ai/api/v1/chat/completions
+ * Auth: Authorization: Bearer <sk-or-v1-...>
+ * Optional headers per OpenRouter docs (April 2026): HTTP-Referer, X-Title
  */
 export class OpenRouterAdapter extends BaseOpenAIAdapter {
   getEndpoint(): string {
@@ -64,6 +70,33 @@ export class OpenRouterAdapter extends BaseOpenAIAdapter {
 
   validateConfig(config: AIProviderConfig): boolean {
     return typeof config.model === 'string' && config.model.includes('/')
+  }
+
+  async generate(config: AIProviderConfig, prompt: string): Promise<string> {
+    const key = (config.apiKey || '').trim()
+    if (!key) {
+      throw new Error(
+        'OpenRouter API key is required. Get yours at openrouter.ai/keys (format: sk-or-v1-...).'
+      )
+    }
+    return super.generate(config, prompt)
+  }
+
+  // Override makeRequest to add OpenRouter-specific optional headers
+  protected async makeRequest(url: string, apiKey: string, body: object): Promise<Response> {
+    let cleanKey = (apiKey || '').trim()
+    cleanKey = cleanKey.replace(/^[\"']|[\"']$/g, '')
+    if (cleanKey.toLowerCase().startsWith('bearer ')) cleanKey = cleanKey.slice(7).trim()
+
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${cleanKey}`,
+      // HTTP-Referer and X-Title are optional but recommended per OpenRouter docs
+      'HTTP-Referer': typeof window !== 'undefined' ? window.location.origin : 'http://localhost:4321',
+      'X-Title': 'Diverse Persona Generator',
+    }
+
+    return fetch(url, { method: 'POST', headers, body: JSON.stringify(body) })
   }
 
   async fetchModels(apiKey: string): Promise<string[]> {
@@ -82,24 +115,67 @@ export class OpenRouterAdapter extends BaseOpenAIAdapter {
 
 /**
  * Ollama Cloud adapter — managed cloud inference (no local GPU needed)
- * Uses the OpenAI-compatible /v1/chat/completions endpoint on ollama.com
- * Requires an Ollama API key from ollama.com/settings/keys
- * Model format: model:cloud  (e.g., kimi-k2.6:cloud)
+ * Uses the native Ollama /api/chat endpoint on ollama.com.
+ * The /v1/chat/completions (OpenAI-compat) path on ollama.com does NOT emit
+ * CORS headers for browser origins, causing "Failed to fetch" from web apps.
+ * The native /api/chat endpoint is the documented path for direct cloud access
+ * and is CORS-enabled for browser clients.
  *
  * Per Ollama Cloud docs (April 2026):
  *   host: "https://ollama.com"
  *   Authorization: Bearer <OLLAMA_API_KEY>
- *   Endpoint: https://ollama.com/v1/chat/completions  (OpenAI-compatible)
+ *   Endpoint: https://ollama.com/api/chat  (native Ollama format)
+ *   Model format: model:cloud  (e.g., kimi-k2.6:cloud)
  */
-export class OllamaCloudAdapter extends BaseOpenAIAdapter {
-  getEndpoint(): string {
-    // Use the OpenAI-compatible endpoint so the standard request body
-    // (model, messages, temperature, max_tokens, stream) is understood correctly.
-    return 'https://ollama.com/v1/chat/completions'
+export class OllamaCloudAdapter implements AIAdapter {
+  private async makeRequest(url: string, apiKey: string, body: object): Promise<Response> {
+    let cleanKey = (apiKey || '').trim()
+    cleanKey = cleanKey.replace(/^[\"']|[\"']$/g, '')
+    if (cleanKey.toLowerCase().startsWith('bearer ')) cleanKey = cleanKey.slice(7).trim()
+
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+    if (cleanKey) headers['Authorization'] = `Bearer ${cleanKey}`
+
+    return fetch(url, { method: 'POST', headers, body: JSON.stringify(body) })
+  }
+
+  async generate(config: AIProviderConfig, prompt: string): Promise<string> {
+    const key = (config.apiKey || '').trim()
+    if (!key) {
+      throw new Error(
+        'Ollama Cloud API key is required. Get yours at ollama.com/settings/keys.'
+      )
+    }
+
+    // Native Ollama /api/chat request body
+    const response = await this.makeRequest('https://ollama.com/api/chat', key, {
+      model: config.model,
+      messages: [{ role: 'user', content: prompt }],
+      stream: false,
+      options: {
+        temperature: config.temperature ?? 0.7,
+        num_predict: config.maxTokens ?? 1000,
+      },
+    })
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      try {
+        const errJson = JSON.parse(errorText)
+        const msg = errJson?.error || errJson?.message
+        if (msg) throw new Error(`Ollama Cloud request failed: ${response.status} — ${msg}`)
+      } catch (parseErr) {
+        if (parseErr instanceof Error && parseErr.message.startsWith('Ollama Cloud')) throw parseErr
+      }
+      throw new Error(`Ollama Cloud request failed: ${response.status} ${response.statusText} - ${errorText}`)
+    }
+
+    // Native Ollama response: { message: { role, content }, done, ... }
+    const data = await response.json()
+    return data.message?.content || data.response || ''
   }
 
   validateConfig(config: AIProviderConfig): boolean {
-    // Ollama models: "model", "model:tag", or "registry/model:tag"
     return typeof config.model === 'string' && config.model.trim().length > 0
   }
 }
