@@ -114,48 +114,46 @@ export class OpenRouterAdapter extends BaseOpenAIAdapter {
 }
 
 /**
- * Ollama Cloud adapter — managed cloud inference (no local GPU needed)
- * Uses the native Ollama /api/chat endpoint on ollama.com.
- * The /v1/chat/completions (OpenAI-compat) path on ollama.com does NOT emit
- * CORS headers for browser origins, causing "Failed to fetch" from web apps.
- * The native /api/chat endpoint is the documented path for direct cloud access
- * and is CORS-enabled for browser clients.
+ * Ollama Cloud adapter — accesses cloud models via the local Ollama daemon.
  *
- * Per Ollama Cloud docs (April 2026):
- *   host: "https://ollama.com"
- *   Authorization: Bearer <OLLAMA_API_KEY>
- *   Endpoint: https://ollama.com/api/chat  (native Ollama format)
+ * WHY localhost and not ollama.com directly:
+ *   Calling https://ollama.com from a browser fails with "Failed to fetch"
+ *   because ollama.com does not emit CORS headers for browser origins.
+ *   The supported pattern (per Ollama Cloud docs, April 2026) is:
+ *     1. Run `ollama signin` once in the terminal
+ *     2. The local Ollama daemon (localhost:11434) transparently routes
+ *        requests for :cloud-tagged models to ollama.com, handling auth
+ *        itself — no Bearer token needed in the request.
+ *
+ *   Endpoint: http://localhost:11434/api/chat  (native Ollama format)
  *   Model format: model:cloud  (e.g., kimi-k2.6:cloud)
+ *   Auth: handled by the daemon after `ollama signin` — API key optional
  */
 export class OllamaCloudAdapter implements AIAdapter {
-  private async makeRequest(url: string, apiKey: string, body: object): Promise<Response> {
-    let cleanKey = (apiKey || '').trim()
-    cleanKey = cleanKey.replace(/^[\"']|[\"']$/g, '')
-    if (cleanKey.toLowerCase().startsWith('bearer ')) cleanKey = cleanKey.slice(7).trim()
-
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-    if (cleanKey) headers['Authorization'] = `Bearer ${cleanKey}`
-
-    return fetch(url, { method: 'POST', headers, body: JSON.stringify(body) })
-  }
+  private readonly endpoint = 'http://localhost:11434/api/chat'
 
   async generate(config: AIProviderConfig, prompt: string): Promise<string> {
-    const key = (config.apiKey || '').trim()
-    if (!key) {
-      throw new Error(
-        'Ollama Cloud API key is required. Get yours at ollama.com/settings/keys.'
-      )
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+    // If user provided an API key use it; otherwise rely on daemon's signin session
+    const key = (config.apiKey || '').trim().replace(/^[\"']|[\"']$/g, '')
+    if (key && !key.toLowerCase().startsWith('bearer ')) {
+      headers['Authorization'] = `Bearer ${key}`
+    } else if (key) {
+      headers['Authorization'] = `Bearer ${key.slice(7).trim()}`
     }
 
-    // Native Ollama /api/chat request body
-    const response = await this.makeRequest('https://ollama.com/api/chat', key, {
-      model: config.model,
-      messages: [{ role: 'user', content: prompt }],
-      stream: false,
-      options: {
-        temperature: config.temperature ?? 0.7,
-        num_predict: config.maxTokens ?? 1000,
-      },
+    const response = await fetch(this.endpoint, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        model: config.model,
+        messages: [{ role: 'user', content: prompt }],
+        stream: false,
+        options: {
+          temperature: config.temperature ?? 0.7,
+          num_predict: config.maxTokens ?? 1000,
+        },
+      }),
     })
 
     if (!response.ok) {
@@ -170,7 +168,6 @@ export class OllamaCloudAdapter implements AIAdapter {
       throw new Error(`Ollama Cloud request failed: ${response.status} ${response.statusText} - ${errorText}`)
     }
 
-    // Native Ollama response: { message: { role, content }, done, ... }
     const data = await response.json()
     return data.message?.content || data.response || ''
   }

@@ -406,9 +406,9 @@ Then go to [ollama.com/settings/keys](https://ollama.com/settings/keys) → **Ad
 
 > **After adding a device key**, grab your API key at [ollama.com/settings/keys](https://ollama.com/settings/keys) and paste it into the app's AI Configuration panel.
 
-**Endpoint used:** `https://ollama.com/api/chat` (native Ollama format — CORS-enabled for browser apps)
+**Endpoint used:** `http://localhost:11434/api/chat` (local Ollama daemon — routes `:cloud` models to `ollama.com` transparently)
 
-> **Note:** The OpenAI-compatible `/v1/chat/completions` path on `ollama.com` does not emit CORS headers for browser origins, so the app uses the native `/api/chat` endpoint instead.
+> **Why localhost?** Browsers block direct cross-origin requests to `ollama.com` (CORS). The correct pattern is to run `ollama signin` once, then let the local daemon proxy cloud requests — it handles auth itself with no Bearer token needed in the app.
 
 **Available cloud models (quick-select chips in the UI):**
 
@@ -425,10 +425,10 @@ Then go to [ollama.com/settings/keys](https://ollama.com/settings/keys) → **Ad
 ```typescript
 // How the adapter connects
 const client = new OllamaCloudAdapter()
-// host: "https://ollama.com"
-// Authorization: "Bearer YOUR_OLLAMA_API_KEY"
-// endpoint: /api/chat (native Ollama format, CORS-enabled)
+// endpoint: http://localhost:11434/api/chat  (local daemon, CORS-safe)
+// auth: handled by `ollama signin` session on the daemon; API key optional
 // request body: { model, messages, stream: false, options: { temperature, num_predict } }
+// the daemon transparently routes kimi-k2.6:cloud → ollama.com
 ```
 
 ---
@@ -697,7 +697,11 @@ Your API key is missing, invalid, or expired. For OpenRouter the key format is `
 The model name is incorrect. Use the quick-select chips in the settings panel for verified model IDs.
 
 **Ollama Cloud: "Failed to fetch" or connection refused**  
-Ensure you have an active Ollama account with cloud access (Free, Pro, or Max plan). The app calls `https://ollama.com/api/chat` (native Ollama endpoint). If you see "Failed to fetch", verify your API key is entered — the endpoint requires `Authorization: Bearer <key>`.
+The app routes cloud models through your local Ollama daemon (`localhost:11434`), not directly to `ollama.com` (which blocks browser CORS requests). Fix checklist:
+1. Install the Ollama app: [ollama.com/download](https://ollama.com/download)
+2. Run `ollama signin` in your terminal (one-time auth)
+3. Confirm Ollama is running: `ollama list` should show cloud models
+4. In AI Configuration, leave the API Key field blank (daemon handles auth) or paste a key from [ollama.com/settings/keys](https://ollama.com/settings/keys)
 
 **Local Ollama: connection refused**  
 Ensure Ollama is running locally:

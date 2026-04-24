@@ -25,8 +25,8 @@ const PROVIDERS: {
   {
     id: 'ollama',
     label: 'Ollama Cloud',
-    hint: 'Primary provider — cloud inference, no local GPU needed. Uses https://ollama.com/api/chat',
-    keyHint: 'Get your key at ollama.com/settings/keys',
+    hint: 'Routes :cloud models via local Ollama daemon. Requires: (1) Ollama app installed, (2) run "ollama signin" in terminal once. API key optional after signin.',
+    keyHint: 'Optional after "ollama signin". Or get a key at ollama.com/settings/keys',
     keyLink: 'https://ollama.com/settings/keys',
     modelHint: 'Format: model:cloud  (e.g., kimi-k2.6:cloud, gemma4:31b-cloud)',
     defaultModel: 'kimi-k2.6:cloud',
@@ -297,6 +297,8 @@ export default function AISettingsPanel({ onClose }: AISettingsPanelProps) {
                   type="password"
                   value={apiKey}
                   onChange={(e) => { setApiKey(e.target.value); setTestResult(null) }}
+                  onInput={(e) => { setApiKey((e.target as HTMLInputElement).value); setTestResult(null) }}
+                  autoComplete="new-password"
                   placeholder={
                     provider === 'local-ollama'
                       ? 'Leave blank for standard local Ollama (no auth required)'
